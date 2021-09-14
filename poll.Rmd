@@ -1,0 +1,146 @@
+---
+title: "poll"
+author: "Sarah G. Gotfredsen"
+date: "9/12/2021"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+LIST OF PACKAGES REQUIRED
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}    # data wrangling
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}   #for generating ballon plot
+if (!require("ggstatsplot")) {install.packages("ggstatsplot"); require("ggstatsplot")} #for visual chi square by condition
+if (!require(lme4)) {install.packages("lme4"); require(lme4)}  
+if (!require(lmerTest)) {install.packages("lmerTest"); require(lmerTest)} 
+if (!require(effects)) {install.packages("effects"); require(effects)}              # plotting regresion results
+if (!require(ordinal)) {install.packages("ordinal"); require(ordinal)}  
+if (!require(plyr)) {install.packages("plyr"); require(plyr)}
+if (!require(scales)) {install.packages("scales"); require(scales)}  
+
+#more packages 
+library(ggplot2)
+library(hrbrthemes)
+library(scales) # to access breaks/formatting functions
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(forcats)
+library(lubridate)
+```
+
+Read in csv
+```{r echo=TRUE, message=FALSE}
+df <- read.csv("ca_recall_polls_2021.csv")
+```
+
+glimpse data 
+```{r}
+str(df)
+glimpse(df)
+```
+
+filter for just Newson and order by ID 
+```{r}
+df_clean <- df %>% filter(df$candidate_name == "Remove" | df$candidate_name == "Keep")
+df_clean <- df_clean[order(df_clean$question_id),]
+
+```
+
+
+Plot by startdate. Remeber to remove SE 
+```{r}
+# x-axis is super cluttered w. individual dates so show by month instead 
+df_clean$startdate2 <- mdy(df_clean$startdate)
+
+p <- ggplot(df_clean, aes(x=startdate2, y=pct, color=candidate_name)) + 
+  geom_point(size=2.5) +
+  geom_smooth(se = FALSE, aes(group = candidate_name))+
+  #geom_hline(yintercept = mean(df_clean$pct), color="blue")+
+  theme_ipsum()
+
+
+#fianlly, add title 
+
+p + labs(title = "Do Californians want to remove Gavin Newsom from office?") + labs(caption = "(based on data from FiveThirtyEight)") + labs(x = "Election day") + labs(y = "%")
+
+
+
+```
+
+
+Let's look at the potential replacement candidates 
+```{r}
+df_other <- df %>% filter(df$candidate_name != "Remove", df$candidate_name != "Keep")
+
+```
+
+calculate mean pct for each candidate
+```{r}
+#df_other_mean <- data.frame(colMeans(na.rm=TRUE, df_other_wide[sapply(df_other_wide, is.numeric)]))
+
+mean_pct <- df_other %>%
+  group_by(candidate_name) %>%
+  summarise_at(vars(pct), list(pct = mean))
+
+
+
+```
+
+
+plot mean pct by descending order. 
+(Larry in the lead followed by Kevin)
+```{r}
+mean_pct  %>%
+  ggplot( aes(x = reorder(candidate_name, -pct), y = pct)) +
+  geom_bar(stat="identity", fill="#f68060", alpha=.6, width=.4) +
+  xlab("") +
+  coord_flip() +
+  theme_ipsum()
+```
+
+see individual polls for each candidate 
+```{r}
+df_other %>%
+  ggplot( aes(x=pct, color=candidate_name, fill=candidate_name)) +
+  geom_histogram(alpha=0.6, binwidth = 5) +
+  scale_fill_viridis(discrete=TRUE) +
+  scale_color_viridis(discrete=TRUE) +
+  theme_ipsum() +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("") +
+  ylab("Assigned Probability (%)") +
+  facet_wrap(~candidate_name)
+```
+
+
+look just at Larry 
+```{r}
+
+larry <- df_other %>% filter(candidate_name == "Larry A. Elder")
+
+
+ggplot(larry, aes(x=startdate, y=pct)) + 
+  geom_point(size=2.5) +
+  geom_smooth()+
+  theme_ipsum()
+
+
+```
+
+
+plot pct per candidate over time. 
+note: it'd be better just to compute the average 
+```{r warning=FALSE}
+df_other%>%
+  ggplot( aes(x=startdate, y=pct, group=candidate_name, color=candidate_name)) +
+    geom_smooth(method = "lm", formula = y ~ splines::bs(x, 3), se = FALSE)+
+   theme_ipsum() 
+```
+
